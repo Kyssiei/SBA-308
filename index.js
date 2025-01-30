@@ -138,13 +138,13 @@ function validateData(courseInfo, AssignmentGroup){
 };
 
 
-//**=========================== PART 2 ================================================= */
+//**=========================== PART 2 ============================================= */
 //Todo: Filter throughout valid assignments 
 
 function filterValidAssignments(AssignmentGroup){
     const now = new Date(); //get current date 
-    console.log(now);
-    console.log(assignments);
+    // console.log(now);
+    // console.log(Assignments);
 
     return AssignmentGroup.assignments.filter(assignment => {
         const dueDate = new Date(assignment.due_at);
@@ -153,75 +153,108 @@ function filterValidAssignments(AssignmentGroup){
     })
 }
 
+//**======================== PART 3 ================================================ */
 
+function matchSubmissionsToAssignments(LearnerSubmissions, validAssignments){
+    let learnerData = {}; //store submissions grouped by learner id
 
+    LearnerSubmissions.forEach(submission => {
+        const matchingAssignment = validAssignments.find(assignment => 
+            assignment.id === submission.assignment_id
+        );
+        if (matchingAssignment){
+            const {learner_id, assignment_id, submission:{score}} = submission;
 
+            if (!learnerData[learner_id]){
+                learnerData[learner_id] = {};// initialize learner data 
+            }
 
+            learnerData[learner_id][assignment_id] = score / matchingAssignment.points_possible;
+        }
+    })
+    return learnerData;
+}
 
+console.log("Filtered Assignments:", filterValidAssignments(AssignmentGroup));
+console.log("Learner Data:", matchSubmissionsToAssignments(LearnerSubmissions, filterValidAssignments(AssignmentGroup)));
 
+//**======================== PART 3 ================================================ */
 
+//Todo: Match learner submissions to valid assignments and apply late penalties
+function matchSubmissionsToAssignments(LearnerSubmissions, validAssignments) {
+    let learnerData = {}; // Store submissions grouped by learner_id
 
+    LearnerSubmissions.forEach(submission => {
+        const matchingAssignment = validAssignments.find(assignment =>
+            assignment.id === submission.assignment_id
+        );
 
+        if (matchingAssignment) {
+            const { learner_id, assignment_id, submission: { score, submitted_at } } = submission;
+            const pointsPossible = matchingAssignment.points_possible;
+            const dueDate = new Date(matchingAssignment.due_at);
+            const submittedDate = new Date(submitted_at);
 
+            let percentage = score / pointsPossible;
 
+            // Apply late penalty if submitted after the due date
+            if (submittedDate > dueDate) {
+                percentage = Math.max(percentage - 0.1, 0); // Ensure percentage is not negative
+            }
 
+            if (!learnerData[learner_id]) {
+                learnerData[learner_id] = { id: learner_id, totalScore: 0, totalWeight: 0 };
+            }
 
+            learnerData[learner_id][assignment_id] = percentage * 100; // Store individual assignment percentage
+            learnerData[learner_id].totalScore += percentage * pointsPossible * matchingAssignment.group_weight;
+            learnerData[learner_id].totalWeight += pointsPossible * matchingAssignment.group_weight;
+        }
+    });
 
+    return learnerData;
+}
 
+//**======================== PART 4 (Final Formatting) ================================ */
 
+//Todo: Compute final averages and return the required format
+function getLearnerData(courseInfo, assignmentGroups, learnerSubmissions) {
+    try {
+        assignmentGroups.forEach(group => validateData(courseInfo, group));
 
+        let learners = {};
 
+        assignmentGroups.forEach(group => {
+            const validAssignments = filterValidAssignments(group);
+            const learnerScores = matchSubmissionsToAssignments(learnerSubmissions, validAssignments);
 
+            // Merge results into learners object
+            Object.entries(learnerScores).forEach(([id, data]) => {
+                if (!learners[id]) {
+                    learners[id] = { id: Number(id), avg: 0, totalScore: 0, totalWeight: 0 };
+                }
 
+                Object.entries(data).forEach(([key, value]) => {
+                    if (key !== "totalScore" && key !== "totalWeight") {
+                        learners[id][key] = value;
+                    }
+                });
 
+                learners[id].totalScore += data.totalScore;
+                learners[id].totalWeight += data.totalWeight;
+            });
+        });
 
+        // Compute final averages
+        return Object.values(learners).map(learner => {
+            learner.avg = learner.totalWeight ? (learner.totalScore / learner.totalWeight) * 100 : 0;
+            delete learner.totalScore;
+            delete learner.totalWeight;
+            return learner;
+        });
 
-
-// function getLearnerData(courseInfo, AssignmentGroup, LearnerSubmissions){ 
-//     if (AssignmentGroup.course_id !== courseInfo.id){
-//         throw new Error ("Assignment Group does not belong to this course"); // assignment group does not match course id
-//     }
-//     if (typeof courseInfo.id !== 'number'){
-//         throw new Error ("Course ID should be a number"); // course info ID should be a number 
-//     }
-//     if (AssignmentGroup.assignments.some(a => a.points_possible === 0)){
-//         throw new Error ("An assiggnment cannot have 0 points possible");
-//     }
-
-// }
-
-
-
-//** ==================== PART 2 ======================================== */
-
-
-
-// LearnerSubmissions.forEach(submission => {
-//     // Check if the submission is a valid object
-//     if (!submission || typeof submission !== 'object') {
-//         throw new Error("Each learner submission must be a valid object.");
-//     }
-
-//     // Check for required properties
-//     if (typeof submission.learner_id !== 'number') {
-//         throw new Error("learner_id must be a number.");
-//     }
-//     if (typeof submission.assignment_id !== 'number') {
-//         throw new Error("assignment_id must be a number.");
-//     }
-//     if (!submission.submission || typeof submission.submission !== 'object') {
-//         throw new Error("Each submission must have a valid 'submission' object.");
-//     }
-
-//     // Check the properties of the submission object
-//     const { submitted_at, score } = submission.submission;
-//     if (typeof submitted_at !== 'string') {
-//         throw new Error(`Invalid submitted_at for learner ${submission.learner_id}.`);
-//     }
-//     if (typeof score !== 'number') {
-//         throw new Error(`Invalid score for learner ${submission.learner_id}.`);
-//     }
-
-//     // Log valid submissions for debugging
-//     console.log(`Valid submission for learner ${submission.learner_id}:`, submission);
-// })
+    } catch (error) {
+        console.error(error.message);
+        return [];
+    }
+}
