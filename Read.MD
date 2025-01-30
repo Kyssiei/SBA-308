@@ -1,0 +1,1 @@
+This projectgit helps process learner assignment data by checking inputs, filtering out assignments that aren’t due yet, and calculating weighted averages. It keeps grading fair by factoring in assignment weights and applying a 10% late penalty when needed. The output is easy to read, showing each learner’s ID, their assignment scores, and their overall weighted average.
